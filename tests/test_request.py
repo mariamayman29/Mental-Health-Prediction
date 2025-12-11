@@ -1,10 +1,8 @@
 import requests
 import json
 
-# The URL of your running local API
 url = "http://127.0.0.1:8000/predict"
 
-# Sample patient data (matches the columns your model expects)
 payload = {
     "Age": 30,
     "Gender": "Male",
@@ -32,16 +30,15 @@ payload = {
 }
 
 try:
-    print("Sending request to API...")
     response = requests.post(url, json=payload)
     
     if response.status_code == 200:
-        print("\n✅ Success!")
-        print("Response from Server:")
+        print("\n Success")
+        print("Response:")
         print(json.dumps(response.json(), indent=2))
     else:
-        print(f"\n❌ Error {response.status_code}:")
+        print(f"\n Error {response.status_code}:")
         print(response.text)
 
 except Exception as e:
-    print(f"\n❌ Connection Error: {e}")
+    print(f"\nConnection Error: {e}")

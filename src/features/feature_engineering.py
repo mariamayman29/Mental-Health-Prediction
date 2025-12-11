@@ -1,72 +1,73 @@
 import pandas as pd
 import numpy as np
-from sklearn.preprocessing import OrdinalEncoder
-from category_encoders import TargetEncoder
+from sklearn.preprocessing import OrdinalEncoder,OneHotEncoder
 
 def feature_engineering(df: pd.DataFrame, encoders=None, fit=True):
-    """
-    Applies encoding and feature engineering.
     
-    Args:
-        df: Input dataframe.
-        encoders: Dictionary of fitted encoders (required if fit=False).
-        fit: Boolean. If True, learns the encodings and performs upsampling.
-             If False, applies existing encodings (for test/production).
-    
-    Returns:
-        df: Transformed dataframe.
-        encoders: Dictionary of fitted encoders (to save for production).
-    """
     df = df.copy()
+
+    work_interfere_order = ['Never', 'Rarely', 'Sometimes', 'Often', 'Not Applicable']
+    no_employees_order = ['1-5', '6-25', '26-100', '100-500', '500-1000', 'More than 1000']
+    leave_order = ['Very easy', 'Somewhat easy', "Don't know", 'Somewhat difficult', 'Very difficult']
     
-    # 1. Identify Columns
-    # 'treatment' is the target, so we exclude it from input features
-    exclude_cols = ['Country', 'Age', 'no_employees', 'treatment']
-    cat_cols = df.columns.drop(exclude_cols, errors='ignore')
+    ordinal_cols = ['work_interfere', 'no_employees', 'leave']
+    onehot_cols = ['Country', 'Gender', 'self_employed', 'family_history', 'remote_work', 
+                   'tech_company', 'benefits', 'care_options', 'wellness_program',
+                   'seek_help', 'anonymity', 'mental_health_consequence',
+                   'phys_health_consequence', 'coworkers', 'supervisor',
+                   'mental_health_interview', 'phys_health_interview',
+                   'mental_vs_physical', 'obs_consequence']
+    
 
-    # 2. Ordinal Encoding
+    ordinal_cols = [col for col in ordinal_cols if col in df.columns]
+    onehot_cols = [col for col in onehot_cols if col in df.columns]
+    
+    # 1. Ordinal Encoding
     if fit:
-        # Initialize and Fit
-        ordinal_encoder = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
-        df[cat_cols] = ordinal_encoder.fit_transform(df[cat_cols])
+        ordinal_encoder = OrdinalEncoder(
+            categories=[work_interfere_order, no_employees_order, leave_order],
+            handle_unknown='use_encoded_value',
+            unknown_value=-1
+        )
+        if ordinal_cols:
+            df[ordinal_cols] = ordinal_encoder.fit_transform(df[ordinal_cols])
+            print(f"Ordinal encoding fitted for: {ordinal_cols}")
     else:
-        # Transform using existing encoder
         ordinal_encoder = encoders['ordinal_encoder']
-        df[cat_cols] = ordinal_encoder.transform(df[cat_cols])
-        
-    print(f"Ordinal encoding {'fitted' if fit else 'applied'}")
-
-    # 3. Target Encoding (Requires Target 'treatment')
-    # Note: We only target encode 'Country' if it exists
-    if 'Country' in df.columns:
-        if fit:
-            target_encoder = TargetEncoder()
-            # We fit on Country using the 'treatment' target
-            df['Country'] = target_encoder.fit_transform(df['Country'], df['treatment'])
-        else:
-            target_encoder = encoders['target_encoder']
-            # For test/prod, we just transform (no target needed)
-            df['Country'] = target_encoder.transform(df['Country'])
+        if ordinal_cols:
+            df[ordinal_cols] = ordinal_encoder.transform(df[ordinal_cols])
+            print(f"Ordinal encoding applied for: {ordinal_cols}")
+    
+    # 2. OneHot Encoding
+    if fit:
+        onehot_encoder = OneHotEncoder(sparse_output=False, handle_unknown='ignore', drop='first')
+        if onehot_cols:
+            df_onehot = onehot_encoder.fit_transform(df[onehot_cols])
+            onehot_feature_names = onehot_encoder.get_feature_names_out(onehot_cols)
             
-        print(f"Target encoding {'fitted' if fit else 'applied'}")
+            df = df.drop(columns=onehot_cols)
+            for i, col_name in enumerate(onehot_feature_names):
+                df[col_name] = df_onehot[:, i]
+            
+            print(f"OneHot encoding fitted for {len(onehot_cols)} columns")
     else:
-        target_encoder = None
+        onehot_encoder = encoders['onehot_encoder']
+        if onehot_cols:
+            df_onehot = onehot_encoder.transform(df[onehot_cols])
+            onehot_feature_names = onehot_encoder.get_feature_names_out(onehot_cols)
+            
+            df = df.drop(columns=onehot_cols)
+            for i, col_name in enumerate(onehot_feature_names):
+                df[col_name] = df_onehot[:, i]
+            
+            print(f"OneHot encoding applied for {len(onehot_cols)} columns")
 
-    # 4. Upsampling (ONLY on Training Data)
     if fit:
-        # Only upsample if we are fitting (Training phase)
-        # This prevents 'duplicate row' leakage in the test set
-        synthetic_df = df.sample(n=2000, replace=True, random_state=42)
-        df = pd.concat([df, synthetic_df], ignore_index=True)
-        print(f"Upsampling done. New shape: {df.shape}")
-
-    # 5. Return Logic
-    if fit:
-        # Bundle encoders to save them later
         new_encoders = {
             'ordinal_encoder': ordinal_encoder,
-            'target_encoder': target_encoder,
-            'cat_cols': cat_cols
+            'onehot_encoder': onehot_encoder,
+            'ordinal_cols': ordinal_cols,
+            'onehot_cols': onehot_cols
         }
         return df, new_encoders
     else:

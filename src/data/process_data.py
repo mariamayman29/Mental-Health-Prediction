@@ -43,22 +43,6 @@ def process_data (df : pd.DataFrame):
         df=df[filt]
         print(" age done")
 
-    if 'no_employees' in df.columns :
-        range_to_number = {
-            '1-5': 3,             
-            '6-25': 15,           
-            '26-100': 63,         
-            '100-500': 300,       
-            '500-1000': 750,      
-            'More than 1000': 1500
-         }
-        df['no_employees'] = df['no_employees'].map(range_to_number)
-        df['no_employees'] = df['no_employees'].astype(int)
-        print('employees done')
-
-    # data augmenting 
-    synthetic_df = df.sample(n=2000, replace=True, random_state=42)
-    df = pd.concat([df, synthetic_df], ignore_index=True)
 
     return df
 
